@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Line and region coverage of a Rust crate under `cargo test` (all targets: unit,
 # integration, bench and example harnesses), measured with cargo-llvm-cov.
-# Usage: zsh rust_cov.zsh CRATE_DIR OUT_DIR [CARGO_ARG...]
+# Usage: zsh rust_cov.zsh [-N|--no-nice] CRATE_DIR OUT_DIR [CARGO_ARG...]
 # CARGO_ARG... go to the test run (e.g. --features foo, --workspace).
 # Writes OUT_DIR/summary.txt (per file), missing_lines.txt, html/index.html,
 # coverage.json, lcov.info and never_executed.txt (functions no test ran).
@@ -12,13 +12,18 @@
 # user scope capped at 3 GB of memory without swap, and builds with -j 1: an
 # instrumented build of a large crate otherwise takes every core and enough memory
 # to freeze a desktop. A cargo call that exceeds the cap is killed and the script
-# stops.
+# stops. -N, --no-nice: keep the normal priority (faster on an idle machine; the
+# memory cap and -j 1 stay).
 if [[ $1 == -h || $1 == --help || $# -lt 2 ]]; then
-	sed -n '2,15p' ${0:A} | cut -c 3-
+	sed -n '2,16p' ${0:A} | cut -c 3-
 	[[ $1 == -h || $1 == --help ]]
 	exit
 fi
-renice -n 19 -p $$ > /dev/null; ionice -c 3 -p $$
+if [[ $1 == -N || $1 == --no-nice ]]; then
+	shift
+else
+	renice -n 19 -p $$ > /dev/null; ionice -c 3 -p $$
+fi
 set -e
 here=${0:A:h}
 crate=${1:A}
