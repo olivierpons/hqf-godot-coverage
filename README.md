@@ -5,6 +5,8 @@
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776ab.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Godot 4](https://img.shields.io/badge/Godot-4-478cbf.svg?logo=godotengine&logoColor=white)](https://godotengine.org/)
 
+🇬🇧 [English](README.md) · 🇫🇷 [Français](README.fr.md) · 🇨🇳 [简体中文](README.zh-CN.md) · 🇮🇳 [हिन्दी](README.hi.md) · 🇪🇸 [Español](README.es.md) · 🇸🇦 [العربية](README.ar.md) · 🇧🇩 [বাংলা](README.bn.md) · 🇧🇷 [Português](README.pt-BR.md) · 🇮🇩 [Bahasa Indonesia](README.id.md) · 🇵🇰 [اردو](README.ur.md)
+
 Code coverage for Godot 4 games:
 
 - `gdcov`: line coverage of GDScript, measured while the project's headless test
@@ -23,7 +25,7 @@ Code coverage for Godot 4 games:
    `OUT/coverage_map.json` maps each probe back to its file, line and function.
 2. **run**: each suite runs on the copy with
    `godot --headless --audio-driver Dummy --path OUT/project --script res://<suite>`,
-   at idle priority (`nice -n 19 ionice -c 3`), several at a time. When its scene
+   at idle priority (`nice -n 19 ionice -c 3`, see below), several at a time. When its scene
    tree exits, a suite writes its counters to `OUT/hits/`.
 3. **report**: the hit files are merged with the map into text, JSON and HTML
    reports.
@@ -84,6 +86,7 @@ gdcov report -p . -o /path/to/run -d 2
 | `-g, --godot PATH` | Godot binary |
 | `-j, --jobs N` | suites run at once (default: 2) |
 | `-t, --timeout S` | seconds before a suite is killed (default: 1800) |
+| `-N, --no-nice` | run the suites at normal priority instead of `nice -n 19 ionice -c 3` (see the section on idle priority below) |
 | `-m, --summary REGEX` | a suite's summary: last match of REGEX in its output (default: its last non-blank line) |
 | `-d, --depth N` | directory levels of a report area (default: 1) |
 
@@ -102,11 +105,27 @@ failed or timed out (the report is written anyway).
 | `OUT/logs/` | output of each suite |
 | `OUT/project/`, `OUT/hits/`, `OUT/coverage_map.json` | instrumented copy, raw counters, probe map |
 
+## Idle priority, on by default
+
+Both tools start their processes with `nice -n 19 ionice -c 3`: the lowest CPU
+priority and the idle I/O class. A coverage run keeps several Godot or cargo processes
+busy for minutes, often while you keep working on the same machine; at idle priority
+they only take the CPU time and disk access nothing else asks for, so the editor, the
+browser and the desktop stay responsive, and the run just takes longer when the
+machine is busy. The idle I/O class matters as much as `nice`: heavy disk writes alone
+can freeze a desktop, especially on an encrypted disk.
+
+On a machine with nothing else to do (a CI runner, a build server), the low priority
+only slows the run down: turn it off with `-N` / `--no-nice`
+(`gdcov all -N ...`, `zsh rust_cov.zsh -N CRATE_DIR OUT_DIR`). For `rust_cov.zsh`,
+the memory cap and `-j 1` stay either way.
+
 ## Rust usage
 
 ```sh
 zsh rust_cov.zsh /path/to/crate /path/to/rust_run
 zsh rust_cov.zsh /path/to/crate /path/to/rust_run --features foo
+zsh rust_cov.zsh -N /path/to/crate /path/to/rust_run   # normal priority
 ```
 
 Arguments after the output directory go to the test run. The script writes, under
@@ -116,7 +135,7 @@ functions of the crate whose every monomorphised instance has a zero count, long
 first, names demangled. `gdcov-rustfuncs -j coverage.json -r /path/to/crate` prints
 that list again from an export.
 
-Every cargo call runs at idle priority inside a systemd user scope capped at 3 GB of
+Every cargo call runs at idle priority (unless `-N`) inside a systemd user scope capped at 3 GB of
 memory with no swap (`systemd-run --user --scope -p MemoryMax=3G -p MemorySwapMax=0`),
 and the build uses `-j 1`: an instrumented build of a large crate otherwise takes every
 core and enough memory to freeze a desktop. A cargo call over the cap is killed and the
