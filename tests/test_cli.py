@@ -74,6 +74,17 @@ def test_parser_actions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
             re.compile,
             False,
         ),
+        (
+            ["-N", "--no-nice"],
+            "low_priority",
+            "run the suites at normal priority, without the default "
+            "nice -n 19 ionice -c 3 (faster on an idle machine; on a desktop in use, "
+            "the default keeps it responsive)",
+            None,
+            True,
+            None,
+            False,
+        ),
         (["-o", "--out"], "out", "run directory (created)", None, None, Path, True),
         (
             ["-p", "--project"],
@@ -129,6 +140,7 @@ def test_parser_actions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         "_StoreAction",
         "_StoreAction",
         "_StoreAction",
+        "_StoreFalseAction",
         "_StoreAction",
         "_StoreAction",
         "_AppendAction",
@@ -177,8 +189,14 @@ def test_parser_defaults_and_short_options() -> None:
         None,
     )
     assert (args.summary, args.tests, args.depth) == (None, "tests/test_*.gd", 1)
+    assert args.low_priority is True
     args = build_parser().parse_args(
-        "all -d 2 -e x -g /g -j 3 -m a+ -o /o -p /p -s y -t 5 -u z -T w".split()
+        "all -d 2 -e x -g /g -j 3 -m a+ -N -o /o -p /p -s y -t 5 -u z -T w".split()
+    )
+    assert args.low_priority is False
+    assert (
+        build_parser().parse_args(["run", "-o", "/o", "--no-nice"]).low_priority
+        is False
     )
     assert (args.summary, args.tests, args.depth) == (re.compile("a+"), "w", 2)
     assert args.exclude == ["x"]
@@ -291,8 +309,12 @@ def test_run_passes_options_to_run_suites(
             3,
             7.0,
             re.compile("x"),
+            True,
         )
     ]
+    seen.clear()
+    assert main(argv + ["-N"]) == 0
+    assert seen[0][-1] is False
 
 
 def test_run_tests_glob(project: Path, godot: Path, tmp_path: Path) -> None:

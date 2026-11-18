@@ -53,7 +53,9 @@ Examples:
   gdcov run -o /path/to/run -u tests/test_player.gd -g /opt/godot/godot
   gdcov report -p /path/to/project -o /path/to/run
 
-Each suite runs under nice -n 19 ionice -c 3 with --headless --audio-driver Dummy.
+Each suite runs with --headless --audio-driver Dummy, under nice -n 19 ionice -c 3
+unless --no-nice is given: a coverage run keeps several Godot processes busy for a
+long time, and at idle priority the desktop and other work stay responsive.
 Exit code: 0, or 1 when a suite failed or timed out (the report is written anyway).
 """
 
@@ -101,6 +103,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="REGEX",
         help="summary of a suite: last match of REGEX in its output "
         "(default: its last non-blank line)",
+    )
+    parser.add_argument(
+        "-N",
+        "--no-nice",
+        dest="low_priority",
+        action="store_false",
+        help="run the suites at normal priority, without the default "
+        "nice -n 19 ionice -c 3 (faster on an idle machine; on a desktop in use, "
+        "the default keeps it responsive)",
     )
     parser.add_argument(
         "-o", "--out", type=Path, required=True, help="run directory (created)"
@@ -165,7 +176,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         copy = out / "project"
         suites = args.suite or find_suites(copy, args.tests, args.skip or ())
         results = run_suites(
-            godot, copy, out, suites, args.jobs, args.timeout, args.summary
+            godot,
+            copy,
+            out,
+            suites,
+            args.jobs,
+            args.timeout,
+            args.summary,
+            args.low_priority,
         )
     if args.command in ("report", "all"):
         total = write_reports(out, project, args.depth)

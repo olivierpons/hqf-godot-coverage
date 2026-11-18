@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import subprocess
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -159,6 +160,12 @@ def test_suite_command() -> None:
     ]
 
 
+def test_suite_command_at_normal_priority() -> None:
+    command = suite_command(Path("/g"), Path("/c"), "tests/test_a.gd", False)
+    assert command[0] == "/g"
+    assert "nice" not in command and "ionice" not in command
+
+
 def _prepare(out: Path) -> None:
     (out / "logs").mkdir(parents=True)
 
@@ -264,3 +271,20 @@ def test_run_suites_reuses_existing_dirs(godot: Path, tmp_path: Path) -> None:
     (out / "logs").mkdir()
     result = run_suites(godot, tmp_path, out, ["test_ok.gd"], 1, 30, None)[0]
     assert result.returncode == 0
+
+
+def test_run_suites_pass_the_priority_choice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[list[str]] = []
+
+    def record(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("gdcov.runner.subprocess.run", record)
+    run_suites(Path("/g"), tmp_path, tmp_path, ["t.gd"], 1, 5.0, None)
+    run_suites(Path("/g"), tmp_path, tmp_path, ["t.gd"], 1, 5.0, None, False)
+    assert [command[0] for command in commands] == ["nice", "/g"]

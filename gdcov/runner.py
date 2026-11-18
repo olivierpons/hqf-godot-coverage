@@ -1,7 +1,8 @@
 """Runs the headless test suites of an instrumented copy, several at a time.
 
 Every suite runs as ``nice -n 19 ionice -c 3 <godot> --headless --audio-driver Dummy
---path <copy> --script res://<suite>`` with ``GDCOV_OUT`` naming the hits directory;
+--path <copy> --script res://<suite>`` (without the ``nice``/``ionice`` prefix when
+low priority is turned off) with ``GDCOV_OUT`` naming the hits directory;
 ``<suite>`` is the script path relative to the project, and the output goes to
 ``logs/<suite with / replaced by __>.log``.
 """
@@ -100,15 +101,20 @@ def log_name(suite: str) -> str:
     return suite.replace("/", "__") + ".log"
 
 
-def suite_command(godot: Path, copy: Path, suite: str) -> list[str]:
-    """Command line running [param suite] of [param copy] at idle priority."""
-    return [
-        "nice",
-        "-n",
-        "19",
-        "ionice",
-        "-c",
-        "3",
+LOW_PRIORITY_PREFIX: tuple[str, ...] = ("nice", "-n", "19", "ionice", "-c", "3")
+
+
+def suite_command(
+    godot: Path, copy: Path, suite: str, low_priority: bool = True
+) -> list[str]:
+    """Command line running [param suite] of [param copy].
+
+    Args:
+        low_priority: Prefixes [constant LOW_PRIORITY_PREFIX]: lowest CPU priority and
+            idle I/O class.
+    """
+    prefix = list(LOW_PRIORITY_PREFIX) if low_priority else []
+    return prefix + [
         str(godot),
         "--headless",
         "--audio-driver",
@@ -127,11 +133,13 @@ def run_suite(
     out: Path,
     timeout: float,
     summary: re.Pattern[str] | None,
+    low_priority: bool = True,
 ) -> SuiteResult:
     """Runs one suite; its hits land in ``out/hits``, its output in ``out/logs``.
 
     Args:
         summary: Passed to [func summary_line].
+        low_priority: Passed to [func suite_command].
     """
     env = dict(os.environ, GDCOV_OUT=str(out / "hits"))
     log = out / "logs" / log_name(suite)
@@ -139,7 +147,7 @@ def run_suite(
     with log.open("w", encoding="utf-8") as sink:
         try:
             done = subprocess.run(
-                suite_command(godot, copy, suite),
+                suite_command(godot, copy, suite, low_priority),
                 stdout=sink,
                 stderr=subprocess.STDOUT,
                 env=env,
@@ -162,13 +170,19 @@ def run_suites(
     jobs: int,
     timeout: float,
     summary: re.Pattern[str] | None,
+    low_priority: bool = True,
 ) -> list[SuiteResult]:
     """Runs [param suites] [param jobs] at a time; writes ``out/suites.json``."""
     (out / "hits").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(exist_ok=True)
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         results = list(
-            pool.map(lambda s: run_suite(godot, copy, s, out, timeout, summary), suites)
+            pool.map(
+                lambda s: run_suite(
+                    godot, copy, s, out, timeout, summary, low_priority
+                ),
+                suites,
+            )
         )
     (out / "suites.json").write_text(
         json.dumps([asdict(r) for r in results], indent=1), encoding="utf-8"
