@@ -1,0 +1,51 @@
+[project]
+name = "gdcov"
+version = "0.1.0"
+description = "GDScript line coverage for headless Godot test suites, and Rust crate coverage"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+authors = [{ name = "Olivier Pons / HQF Development" }]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.scripts]
+gdcov = "gdcov.cli:main"
+gdcov-rustfuncs = "gdcov.rustfuncs:main"
+
+[project.urls]
+Repository = "https://github.com/olivierpons/hqf-godot-coverage"
+
+[dependency-groups]
+dev = ["black>=25", "isort>=6", "mypy>=1.18", "pytest>=9"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gdcov"]
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+files = ["gdcov", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mutmut]
+source_paths = ["gdcov"]
+pytest_add_cli_args_test_selection = ["tests/"]
